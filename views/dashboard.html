@@ -2,14 +2,27 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>Dein Dashboard</title>
+  <title>Dashboard – Noble Gaming</title>
+  <style>
+    body {
+      background-color: #181818;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin-top: 50px;
+    }
+    img {
+      border-radius: 50%;
+      width: 100px;
+      height: 100px;
+    }
+  </style>
 </head>
 <body>
-
   <h1>Willkommen, <span id="username">Unbekannt</span></h1>
-  <img id="avatar" src="" alt="Profilbild" width="100">
-  <p>Du bist eingeloggt über: <span id="provider"></span></p>
-  <a href="/auth/logout">Logout</a>
+  <img id="avatar" src="" alt="Profilbild">
+  <p>Du bist eingeloggt über: <span id="provider">Unbekannt</span></p>
+  <p><a href="/auth/logout">Logout</a></p>
 
   <script>
     fetch('/auth/user')
@@ -20,6 +33,5 @@
         document.getElementById('provider').innerText = user.provider || 'Unbekannt';
       });
   </script>
-
 </body>
 </html>

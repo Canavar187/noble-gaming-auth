@@ -2,24 +2,43 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>NobleGamble Login</title>
+  <title>Noble Gaming – Login</title>
+  <style>
+    body {
+      background-color: #121212;
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin-top: 50px;
+    }
+    h1 {
+      font-size: 2em;
+    }
+    .login-btn {
+      margin: 20px;
+      display: inline-block;
+    }
+    img.discord-logo {
+      width: 64px;
+      height: 64px;
+      cursor: pointer;
+    }
+  </style>
 </head>
-<body style="text-align:center; font-family:sans-serif; background:#111; color:white;">
-  <h1>🔐 Willkommen bei NobleGamble</h1>
+<body>
+  <h1>🔐 Willkommen bei <strong>Noble Gaming</strong></h1>
   <p>Bitte wähle deinen Login:</p>
 
-  <!-- Steam Login Button -->
-  <p>
+  <div class="login-btn">
     <a href="/auth/steam">
-      <img src="https://steamcdn-a.akamaihd.net/steamcommunity/public/images/steamworks_docs/english/sits_small.png" alt="Mit Steam einloggen">
+      <img src="https://steamcommunity-a.akamaihd.net/public/images/signinthroughsteam/sits_01.png" alt="Steam Login">
     </a>
-  </p>
+  </div>
 
-  <!-- Discord Login Button -->
-  <p>
+  <div class="login-btn">
     <a href="/auth/discord">
-      <img src="https://cdn-icons-png.flaticon.com/512/2111/2111370.png" alt="Mit Discord einloggen" width="100">
+      <img class="discord-logo" src="https://cdn-icons-png.flaticon.com/512/2111/2111370.png" alt="Discord Login">
     </a>
-  </p>
+  </div>
 </body>
 </html>
