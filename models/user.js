@@ -1,11 +1,12 @@
+// models/User.js
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-    username: String,
-    password: String,
-    email: String,
-    trustScore: { type: Number, default: 100 },
-    premium: { type: Boolean, default: false }
+  discordId: String,
+  steamId: String,
+  username: String,
+  avatar: String,
+  provider: String
 });
 
 module.exports = mongoose.model('User', userSchema);
