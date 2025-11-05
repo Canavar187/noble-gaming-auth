@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "express": "^5.1.0",
+    "express-session": "^1.18.2",
+    "passport": "^0.7.0",
+    "passport-discord": "^0.1.4",
+    "passport-steam": "^1.0.18"
+  }
+}

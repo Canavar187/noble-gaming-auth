@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Gamepad Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="background-color:#111; color:#fff; font-family:sans-serif; text-align:center;">
+<h2>🎮 Gamepad Ready – NobleGamble</h2>
+<p>Drücke einen beliebigen Knopf am Controller...</p>
+<div id="output">⏳ Warten auf Eingabe...</div>
+
+<script>
+window.addEventListener("gamepadconnected", function(e) {
+  document.getElementById("output").innerHTML = "✅ Controller erkannt: " + e.gamepad.id;
+});
+</script>
+</body>
+</html>

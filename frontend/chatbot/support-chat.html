@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>KI Support Chatbot</title>
+  <style>
+    body { font-family: Arial; }
+    .chatbox { width: 400px; height: 300px; border: 1px solid #ccc; padding: 10px; overflow-y: auto; margin-bottom: 10px; }
+    input { width: 300px; padding: 5px; }
+  </style>
+</head>
+<body>
+<h2>🤖 KI-Support (Demo)</h2>
+<div class="chatbox" id="chatbox">
+  <div><b>User:</b> Wie melde ich einen Spieler?</div>
+  <div><b>Bot:</b> Du kannst den Spieler direkt im Matchmenü unter „Spieler melden“ auswählen.</div>
+</div>
+<input id="userInput" placeholder="Frage stellen..." />
+<button onclick="reply()">Senden</button>
+
+<script>
+  function reply() {
+    var input = document.getElementById('userInput').value;
+    var chat = document.getElementById('chatbox');
+    chat.innerHTML += "<div><b>User:</b> " + input + "</div>";
+    setTimeout(() => {
+      chat.innerHTML += "<div><b>Bot:</b> Dies ist eine Beispielantwort des KI-Systems.</div>";
+      chat.scrollTop = chat.scrollHeight;
+    }, 500);
+    document.getElementById('userInput').value = "";
+  }
+</script>
+</body>
+</html>

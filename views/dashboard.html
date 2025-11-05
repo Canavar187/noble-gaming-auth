@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Dein Dashboard</title>
+</head>
+<body>
+
+  <h1>Willkommen, <span id="username">Unbekannt</span></h1>
+  <img id="avatar" src="" alt="Profilbild" width="100">
+  <p>Du bist eingeloggt über: <span id="provider"></span></p>
+  <a href="/auth/logout">Logout</a>
+
+  <script>
+    fetch('/auth/user')
+      .then(res => res.json())
+      .then(user => {
+        document.getElementById('username').innerText = user.username || 'Unbekannt';
+        document.getElementById('avatar').src = user.avatar || '';
+        document.getElementById('provider').innerText = user.provider || 'Unbekannt';
+      });
+  </script>
+
+</body>
+</html>

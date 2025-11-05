@@ -1,0 +1,36 @@
+body {
+  margin: 0;
+  padding: 1rem;
+  font-family: sans-serif;
+  background-color: #0e0e0e;
+  color: #ffffff;
+  text-align: center;
+}
+header h1 {
+  font-size: 2rem;
+}
+nav button {
+  display: block;
+  width: 90%;
+  margin: 0.5rem auto;
+  padding: 1rem;
+  font-size: 1.2rem;
+  background: #1f1f1f;
+  color: white;
+  border: none;
+  border-radius: 8px;
+}
+nav button:hover {
+  background: #333;
+}
+footer {
+  margin-top: 2rem;
+  font-size: 0.9rem;
+  color: #aaa;
+}
+@media (min-width: 768px) {
+  nav button {
+    width: 40%;
+    font-size: 1.4rem;
+  }
+}
