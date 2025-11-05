@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 
-// API-Endpunkt: Aktuell eingeloggter Nutzer
 router.get('/', (req, res) => {
   if (req.isAuthenticated()) {
     res.json(req.user);
