@@ -1,17 +1,17 @@
-// database.js
+// ...existing code...
 const mongoose = require('mongoose');
-require('dotenv').config();
 
 async function connectDB() {
-  try {
-    await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    });
-    console.log('✅ MongoDB verbunden');
-  } catch (err) {
-    console.error('❌ MongoDB Verbindung fehlgeschlagen:', err);
+  const uri = process.env.MONGO_URI;
+  if (!uri) {
+    throw new Error('MONGO_URI not set in environment');
   }
+  await mongoose.connect(uri, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+  });
+  console.log('Connected to MongoDB');
 }
 
 module.exports = connectDB;
+// ...existing code...

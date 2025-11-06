@@ -1,12 +1,23 @@
+// ...existing code...
 const passport = require('passport');
+const User = require('../models/user');
 
-passport.serializeUser((user, done) => done(null, user.id));
-passport.deserializeUser(async (id, done) => {
-  const User = require('../models/User');
+passport.serializeUser((user, done) => {
+  // store minimal info in session
+  done(null, { id: user._id, provider: user.provider });
+});
+
+passport.deserializeUser(async (obj, done) => {
   try {
-    const user = await User.findById(id);
-    done(null, user);
+    if (!obj || !obj.id) return done(null, false);
+    const user = await User.findById(obj.id).lean();
+    if (!user) return done(null, false);
+    return done(null, user);
   } catch (err) {
-    done(err, null);
+    console.error('DeserializeUser error:', err);
+    return done(err, null);
   }
 });
+
+module.exports = passport;
+// ...existing code...

@@ -1,20 +1,15 @@
+// ...existing code...
 const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
-const User = require('../models/User');
-const mongoose = require('mongoose');
+const User = require('../models/user');
 
-passport.serializeUser((user, done) => {
-  done(null, user.id);
-});
-
-passport.deserializeUser(async (id, done) => {
-  try {
-    const user = await User.findById(id);
-    done(null, user);
-  } catch (err) {
-    done(err, null);
+function getDiscordAvatarUrl(profile) {
+  if (profile && profile.avatar) {
+    return `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png`;
   }
-});
+  const disc = profile && profile.discriminator ? parseInt(profile.discriminator, 10) || 0 : 0;
+  return `https://cdn.discordapp.com/embed/avatars/${disc % 5}.png`;
+}
 
 passport.use(new DiscordStrategy({
   clientID: process.env.DISCORD_CLIENT_ID,
@@ -23,20 +18,43 @@ passport.use(new DiscordStrategy({
   scope: ['identify']
 }, async (accessToken, refreshToken, profile, done) => {
   try {
-    let user = await User.findOne({ discordId: profile.id });
+    if (!profile || !profile.id) {
+      const err = new Error('Invalid Discord profile');
+      console.error(err);
+      return done(err, null);
+    }
+
+    const discordId = profile.id;
+    const username = profile.username || `discord_${discordId}`;
+    const avatar = getDiscordAvatarUrl(profile);
+
+    let user = await User.findOne({ discordId });
 
     if (!user) {
       user = await User.create({
-        discordId: profile.id,
-        username: profile.username,
-        avatar: `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png`,
-        provider: 'Discord'
+        discordId,
+        username,
+        avatar,
+        provider: 'Discord',
+        profileRaw: profile
       });
+      console.log(`Created Discord user ${username} (${discordId})`);
+    } else {
+      const needsUpdate = (user.username !== username) || (user.avatar !== avatar);
+      if (needsUpdate) {
+        user.username = username;
+        user.avatar = avatar;
+        await user.save();
+        console.log(`Updated Discord user ${username} (${discordId})`);
+      }
     }
 
     return done(null, user);
   } catch (err) {
-    console.error('Fehler beim Discord-Login:', err);
+    console.error('Discord strategy error:', err);
     return done(err, null);
   }
 }));
+
+module.exports = passport;
+// ...existing code...
