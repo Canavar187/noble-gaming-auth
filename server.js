@@ -130,22 +130,65 @@ app.get('/logout', (req, res, next) => {
   });
 });
 
-/* Health & ping endpoints for uptime monitoring */
-app.get('/ping', (req, res) => {
-  res.send('pong');
-});
+/* Health & ping endpoints for uptime monitoring (resilient) */
+// maintain last known DB state to respond quickly
+let lastDbState = 0;
+try {
+  const mongoose = require('mongoose');
+  if (mongoose && mongoose.connection) {
+    lastDbState = mongoose.connection.readyState || 0;
+    mongoose.connection.on('connected', () => { lastDbState = 1; console.log('Mongoose connected'); });
+    mongoose.connection.on('disconnected', () => { lastDbState = 0; console.log('Mongoose disconnected'); });
+    mongoose.connection.on('reconnected', () => { lastDbState = 1; console.log('Mongoose reconnected'); });
+    mongoose.connection.on('error', (err) => { lastDbState = 0; console.error('Mongoose error', err && err.message); });
+  }
+} catch (e) {
+  console.error('Health init mongoose read failed', e && e.message);
+}
+
+app.get('/ping', (req, res) => res.send('pong'));
 
 app.get('/health', async (req, res) => {
-  const mongoose = require('mongoose');
-  const dbState = typeof mongoose.connection !== 'undefined' ? mongoose.connection.readyState : 0;
-  // mongoose states: 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
-  const ok = dbState === 1;
+  const start = Date.now();
+  const okFast = lastDbState === 1;
+
+  // lightweight async DB ping with 2s timeout to avoid monitor timeouts
+  const dbCheck = new Promise(resolve => {
+    try {
+      const mongoose = require('mongoose');
+      if (mongoose && mongoose.connection && mongoose.connection.db) {
+        mongoose.connection.db.admin().ping((err, result) => {
+          if (err) return resolve({ ok: false, err: err.message });
+          resolve({ ok: true, result });
+        });
+      } else {
+        resolve({ ok: false, err: 'no-connection' });
+      }
+    } catch (e) {
+      resolve({ ok: false, err: e.message });
+    }
+  });
+
+  const timeout = new Promise(resolve => setTimeout(() => resolve({ ok: false, err: 'timeout' }), 2000));
+  const checkResult = await Promise.race([dbCheck, timeout]);
+  const elapsed = Date.now() - start;
+  const healthy = okFast && checkResult.ok;
+
   const body = {
-    status: ok ? 'ok' : 'fail',
-    dbState,
+    status: healthy ? 'ok' : 'fail',
+    lastDbState,
+    dbCheck: checkResult.ok ? 'ok' : (checkResult.err || 'fail'),
+    elapsedMs: elapsed,
     timestamp: new Date().toISOString()
   };
-  res.status(ok ? 200 : 503).json(body);
+
+  if (!healthy || elapsed > 500) {
+    console.warn('Health check:', body);
+  } else {
+    console.log('Health ok', body);
+  }
+
+  res.status(healthy ? 200 : 503).json(body);
 });
 
 /* Generic error handler */

@@ -3,18 +3,12 @@ const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
 const User = require('../models/user');
 
-function getDiscordAvatarUrl(profile) {
-  if (profile && profile.avatar) {
-    return `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png`;
-  }
-  const disc = profile && profile.discriminator ? parseInt(profile.discriminator, 10) || 0 : 0;
-  return `https://cdn.discordapp.com/embed/avatars/${disc % 5}.png`;
-}
+const discordCallback = process.env.DISCORD_CALLBACK || (`${process.env.APP_URL || (`https://${process.env.RENDER_EXTERNAL_HOSTNAME || 'noble-gaming-auth.onrender.com'}`)}/auth/discord/callback`);
 
 passport.use(new DiscordStrategy({
   clientID: process.env.DISCORD_CLIENT_ID,
   clientSecret: process.env.DISCORD_SECRET,
-  callbackURL: process.env.DISCORD_CALLBACK,
+  callbackURL: discordCallback,
   scope: ['identify']
 }, async (accessToken, refreshToken, profile, done) => {
   try {
@@ -25,8 +19,10 @@ passport.use(new DiscordStrategy({
     }
 
     const discordId = profile.id;
-    const username = profile.username || `discord_${discordId}`;
-    const avatar = getDiscordAvatarUrl(profile);
+    // build display name with discriminator when available
+    const username = profile.username ? (profile.discriminator ? `${profile.username}#${profile.discriminator}` : profile.username) : `discord_${discordId}`;
+    // avatar URL (if available)
+    const avatar = profile.avatar ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png` : null;
 
     let user = await User.findOne({ discordId });
 
