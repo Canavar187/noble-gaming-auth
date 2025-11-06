@@ -3,9 +3,18 @@ const passport = require('passport');
 const SteamStrategy = require('passport-steam').Strategy;
 const User = require('../models/user');
 
+// Build a safe app URL and default return path.
+// Uses RENDER_EXTERNAL_HOSTNAME or APP_URL if provided in env, otherwise falls back to known Render hostname.
+const appHost = process.env.APP_URL || (`https://${process.env.RENDER_EXTERNAL_HOSTNAME || 'noble-gaming-auth.onrender.com'}`);
+const appUrl = appHost.replace(/\/$/, '');
+const defaultReturn = `${appUrl}/auth/steam/callback`;
+// Allow explicit override via STEAM_RETURN_URL env var
+const returnURL = process.env.STEAM_RETURN_URL || defaultReturn;
+const realm = process.env.STEAM_REALM || appUrl;
+
 passport.use(new SteamStrategy({
-  returnURL: process.env.STEAM_RETURN_URL,
-  realm: process.env.STEAM_REALM || process.env.STEAM_RETURN_URL || ('http://localhost:' + (process.env.PORT || 3000) + '/'),
+  returnURL,
+  realm,
   apiKey: process.env.STEAM_API_KEY
 }, async (identifier, profile, done) => {
   try {

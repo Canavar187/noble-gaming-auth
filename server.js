@@ -69,6 +69,14 @@ app.get('/auth/discord/callback',
 app.get('/auth/steam', passport.authenticate('steam', { failureRedirect: '/login' }), (req, res) => {
   // steam uses a redirect, not reached normally
 });
+
+// Alias: accept both /auth/steam/callback and /auth/steam/return
+app.get('/auth/steam/callback',
+  passport.authenticate('steam', { failureRedirect: '/login' }),
+  (req, res) => {
+    res.redirect('/welcome');
+  });
+
 app.get('/auth/steam/return',
   passport.authenticate('steam', { failureRedirect: '/login' }),
   (req, res) => {
