@@ -147,6 +147,25 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;');
 }
 
+// Health & ping endpoints for uptime monitoring
+app.get('/ping', (req, res) => {
+  res.send('pong');
+});
+
+app.get('/health', async (req, res) => {
+  // lazy require to avoid circular issues during bootstrap
+  const mongoose = require('mongoose');
+  const dbState = typeof mongoose.connection !== 'undefined' ? mongoose.connection.readyState : 0;
+  // states: 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+  const ok = dbState === 1;
+  const body = {
+    status: ok ? 'ok' : 'fail',
+    dbState,
+    timestamp: new Date().toISOString()
+  };
+  res.status(ok ? 200 : 503).json(body);
+});
+
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
