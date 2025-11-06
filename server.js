@@ -7,7 +7,6 @@ const session = require('express-session');
 const passport = require('passport');
 const connectDB = require('./database');
 const MongoStore = require('connect-mongo');
-const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,17 +34,26 @@ app.use(session({
   store: process.env.MONGO_URI ? MongoStore.create({ mongoUrl: process.env.MONGO_URI }) : undefined
 }));
 
-// Rate limiter for auth endpoints
-const AUTH_RATE_WINDOW_MS = Number(process.env.AUTH_RATE_WINDOW_MS || 60_000);
-const AUTH_RATE_MAX = Number(process.env.AUTH_RATE_MAX || 30);
-const authLimiter = rateLimit({
-  windowMs: AUTH_RATE_WINDOW_MS,
-  max: AUTH_RATE_MAX,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many requests, please try again later.' }
-});
-app.use('/auth', authLimiter);
+// Optional rate limiter: require only if installed to avoid deploy crashes
+let rateLimit = null;
+try {
+  rateLimit = require('express-rate-limit');
+} catch (e) {
+  console.warn('express-rate-limit not installed; skipping auth rate limiting');
+}
+
+if (rateLimit) {
+  const AUTH_RATE_WINDOW_MS = Number(process.env.AUTH_RATE_WINDOW_MS || 60_000);
+  const AUTH_RATE_MAX = Number(process.env.AUTH_RATE_MAX || 30);
+  const authLimiter = rateLimit({
+    windowMs: AUTH_RATE_WINDOW_MS,
+    max: AUTH_RATE_MAX,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, please try again later.' }
+  });
+  app.use('/auth', authLimiter);
+}
 
 // Initialize Passport
 app.use(passport.initialize());
@@ -147,9 +155,21 @@ app.get('/ping', (req, res) => res.send('pong'));
 
 app.get('/health', basicAuth, async (req, res) => {
   const start = Date.now();
-  const okFast = lastDbState === 1;
 
-  // lightweight async DB ping with 2s timeout
+  // If mongoose reports connected recently, reply OK immediately (fast and reliable)
+  if (lastDbState === 1) {
+    const body = {
+      status: 'ok',
+      lastDbState,
+      dbCheck: 'skipped',
+      elapsedMs: Date.now() - start,
+      timestamp: new Date().toISOString()
+    };
+    console.log('Health fast-ok', body);
+    return res.status(200).json(body);
+  }
+
+  // Otherwise try a DB ping, with extended timeout (5s) to avoid false negatives
   const dbCheck = new Promise(resolve => {
     try {
       const mongoose = require('mongoose');
@@ -166,12 +186,11 @@ app.get('/health', basicAuth, async (req, res) => {
     }
   });
 
-  const timeout = new Promise(resolve => setTimeout(() => resolve({ ok: false, err: 'timeout' }), 2000));
+  const timeoutMs = Number(process.env.HEALTH_DB_TIMEOUT_MS || 5000);
+  const timeout = new Promise(resolve => setTimeout(() => resolve({ ok: false, err: 'timeout' }), timeoutMs));
   const checkResult = await Promise.race([dbCheck, timeout]);
   const elapsed = Date.now() - start;
-
-  // NEW: consider healthy if last known DB connection is good OR db ping succeeded.
-  const healthy = (okFast || checkResult.ok);
+  const healthy = checkResult.ok;
 
   const body = {
     status: healthy ? 'ok' : 'fail',
@@ -181,7 +200,6 @@ app.get('/health', basicAuth, async (req, res) => {
     timestamp: new Date().toISOString()
   };
 
-  // log only failures or slow checks
   if (!healthy || elapsed > 1000) {
     console.warn('Health check:', body);
   } else {
