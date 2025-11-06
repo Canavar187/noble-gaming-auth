@@ -11,13 +11,13 @@ const MongoStore = require('connect-mongo');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// DB verbinden
+// Connect to MongoDB (database.js should export async connect function)
 connectDB().catch(err => {
   console.error('MongoDB connection error', err);
   process.exit(1);
 });
 
-// Trust proxy on render/production so cookies work behind proxy
+// Trust proxy on Render/production so cookies work behind proxy
 if (process.env.NODE_ENV === 'production') {
   app.set('trust proxy', 1);
 }
@@ -34,21 +34,20 @@ app.use(session({
   store: process.env.MONGO_URI ? MongoStore.create({ mongoUrl: process.env.MONGO_URI }) : undefined
 }));
 
-// Passport init (serialize/deserialize defined in auth/user.js)
+// Initialize Passport
 app.use(passport.initialize());
 app.use(passport.session());
 
 // Static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Load passport serialization and strategies AFTER session & passport init
-require('./auth/user');      // defines passport.serializeUser / deserializeUser
-require('./auth/discord');   // registers 'discord' strategy
-require('./auth/steam');     // registers 'steam' strategy
+// Load passport configuration after session is configured
+require('./auth/user');      // serializeUser / deserializeUser
+require('./auth/discord');   // discord strategy
+require('./auth/steam');     // steam strategy
 
-// Routes
+// Simple pages / routes
 app.get('/', (req, res) => {
-  // Serve login or index based on presence of public/index.html
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -65,12 +64,11 @@ app.get('/auth/discord/callback',
   });
 
 /* Steam Auth */
-// Note: passport-steam expects callback route to match returnURL in strategy
 app.get('/auth/steam', passport.authenticate('steam', { failureRedirect: '/login' }), (req, res) => {
-  // steam uses a redirect, not reached normally
+  // steam initiates redirect, this handler is normally not reached
 });
 
-// Alias: accept both /auth/steam/callback and /auth/steam/return
+// Accept both callback and return paths (some providers use /callback)
 app.get('/auth/steam/callback',
   passport.authenticate('steam', { failureRedirect: '/login' }),
   (req, res) => {
@@ -83,7 +81,7 @@ app.get('/auth/steam/return',
     res.redirect('/welcome');
   });
 
-/* Welcome route (dynamic server-side, simple template) */
+/* Welcome route */
 app.get('/welcome', (req, res) => {
   if (!req.isAuthenticated || !req.isAuthenticated()) {
     return res.redirect('/login');
@@ -115,11 +113,13 @@ app.get('/welcome', (req, res) => {
   res.send(html);
 });
 
+/* API route to check user session */
 app.get('/api/user', (req, res) => {
   if (!req.isAuthenticated || !req.isAuthenticated()) return res.status(401).json({ authenticated: false });
   res.json({ authenticated: true, user: req.user });
 });
 
+/* Logout */
 app.get('/logout', (req, res, next) => {
   req.logout(function(err) {
     if (err) return next(err);
@@ -130,13 +130,31 @@ app.get('/logout', (req, res, next) => {
   });
 });
 
-// Generic error handler
+/* Health & ping endpoints for uptime monitoring */
+app.get('/ping', (req, res) => {
+  res.send('pong');
+});
+
+app.get('/health', async (req, res) => {
+  const mongoose = require('mongoose');
+  const dbState = typeof mongoose.connection !== 'undefined' ? mongoose.connection.readyState : 0;
+  // mongoose states: 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+  const ok = dbState === 1;
+  const body = {
+    status: ok ? 'ok' : 'fail',
+    dbState,
+    timestamp: new Date().toISOString()
+  };
+  res.status(ok ? 200 : 503).json(body);
+});
+
+/* Generic error handler */
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   res.status(500).send('Internal Server Error');
 });
 
-// simple html escape to avoid injection
+/* utility: simple html escape */
 function escapeHtml(str) {
   if (!str) return '';
   return String(str)
@@ -146,25 +164,6 @@ function escapeHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 }
-
-// Health & ping endpoints for uptime monitoring
-app.get('/ping', (req, res) => {
-  res.send('pong');
-});
-
-app.get('/health', async (req, res) => {
-  // lazy require to avoid circular issues during bootstrap
-  const mongoose = require('mongoose');
-  const dbState = typeof mongoose.connection !== 'undefined' ? mongoose.connection.readyState : 0;
-  // states: 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
-  const ok = dbState === 1;
-  const body = {
-    status: ok ? 'ok' : 'fail',
-    dbState,
-    timestamp: new Date().toISOString()
-  };
-  res.status(ok ? 200 : 503).json(body);
-});
 
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
