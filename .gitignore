@@ -1,2 +1,4 @@
-node_modules/
 .env
+node_modules/
+curl_verbose.txt
+curl_health_verbose.txt
