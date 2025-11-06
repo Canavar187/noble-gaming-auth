@@ -7,11 +7,12 @@ const session = require('express-session');
 const passport = require('passport');
 const connectDB = require('./database');
 const MongoStore = require('connect-mongo');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Connect to MongoDB (database.js should export async connect function)
+// Connect to MongoDB
 connectDB().catch(err => {
   console.error('MongoDB connection error', err);
   process.exit(1);
@@ -22,17 +23,29 @@ if (process.env.NODE_ENV === 'production') {
   app.set('trust proxy', 1);
 }
 
-// Session Middleware (use Mongo session store for persistence)
+// Session Middleware
 app.use(session({
   secret: process.env.SESSION_SECRET || 'noblegaming_secret',
   resave: false,
   saveUninitialized: false,
   cookie: {
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 1000 * 60 * 60 * 24 * 7 // 7 days
+    maxAge: 1000 * 60 * 60 * 24 * 7
   },
   store: process.env.MONGO_URI ? MongoStore.create({ mongoUrl: process.env.MONGO_URI }) : undefined
 }));
+
+// Rate limiter for auth endpoints
+const AUTH_RATE_WINDOW_MS = Number(process.env.AUTH_RATE_WINDOW_MS || 60_000);
+const AUTH_RATE_MAX = Number(process.env.AUTH_RATE_MAX || 30);
+const authLimiter = rateLimit({
+  windowMs: AUTH_RATE_WINDOW_MS,
+  max: AUTH_RATE_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' }
+});
+app.use('/auth', authLimiter);
 
 // Initialize Passport
 app.use(passport.initialize());
@@ -41,79 +54,45 @@ app.use(passport.session());
 // Static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Load passport configuration after session is configured
-require('./auth/user');      // serializeUser / deserializeUser
-require('./auth/discord');   // discord strategy
-require('./auth/steam');     // steam strategy
+// Load passport configuration after session
+require('./auth/user');
+require('./auth/discord');
+require('./auth/steam');
 
 // Simple pages / routes
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.get('/login', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'login.html'));
-});
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 
 /* Discord Auth */
 app.get('/auth/discord', passport.authenticate('discord', { scope: ['identify'] }));
 app.get('/auth/discord/callback',
   passport.authenticate('discord', { failureRedirect: '/login' }),
-  (req, res) => {
-    res.redirect('/welcome');
-  });
+  (req, res) => { res.redirect('/welcome'); });
 
 /* Steam Auth */
-app.get('/auth/steam', passport.authenticate('steam', { failureRedirect: '/login' }), (req, res) => {
-  // steam initiates redirect, this handler is normally not reached
-});
-
-// Accept both callback and return paths (some providers use /callback)
+app.get('/auth/steam', passport.authenticate('steam', { failureRedirect: '/login' }), (req, res) => {});
 app.get('/auth/steam/callback',
   passport.authenticate('steam', { failureRedirect: '/login' }),
-  (req, res) => {
-    res.redirect('/welcome');
-  });
-
+  (req, res) => { res.redirect('/welcome'); });
 app.get('/auth/steam/return',
   passport.authenticate('steam', { failureRedirect: '/login' }),
-  (req, res) => {
-    res.redirect('/welcome');
-  });
+  (req, res) => { res.redirect('/welcome'); });
 
-/* Welcome route */
+/* Welcome */
 app.get('/welcome', (req, res) => {
-  if (!req.isAuthenticated || !req.isAuthenticated()) {
-    return res.redirect('/login');
-  }
+  if (!req.isAuthenticated || !req.isAuthenticated()) return res.redirect('/login');
   const user = req.user;
   const html = `
-  <!doctype html>
-  <html>
-    <head>
-      <meta charset="utf-8" />
-      <title>Welcome - Noble Gaming</title>
-      <meta name="viewport" content="width=device-width,initial-scale=1" />
-      <style>
-        body{font-family:Arial,Helvetica,sans-serif;background:#0b0b0f;color:#eee;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
-        .card{background:#121217;padding:24px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.5);max-width:720px;width:100%}
-        .avatar{width:96px;height:96px;border-radius:50%;object-fit:cover}
-      </style>
-    </head>
-    <body>
-      <div class="card">
-        <h1>Willkommen, ${escapeHtml(user.username || 'Player')}</h1>
-        <img src="${escapeHtml(user.avatar || '/default-avatar.png')}" alt="avatar" class="avatar" />
-        <p>Provider: ${escapeHtml(user.provider || 'unknown')}</p>
-        <p><strong>ID:</strong> ${escapeHtml(user.discordId || user.steamId || user._id)}</p>
-        <p><a href="/logout">Logout</a></p>
-      </div>
-    </body>
-  </html>`;
+  <!doctype html><html><head><meta charset="utf-8"/><title>Welcome</title></head><body>
+  <h1>Willkommen, ${escapeHtml(user.username || 'Player')}</h1>
+  <img src="${escapeHtml(user.avatar || '/default-avatar.png')}" width="96" height="96" />
+  <p>Provider: ${escapeHtml(user.provider || 'unknown')}</p>
+  <p><a href="/logout">Logout</a></p>
+  </body></html>`;
   res.send(html);
 });
 
-/* API route to check user session */
+/* API route */
 app.get('/api/user', (req, res) => {
   if (!req.isAuthenticated || !req.isAuthenticated()) return res.status(401).json({ authenticated: false });
   res.json({ authenticated: true, user: req.user });
@@ -130,7 +109,7 @@ app.get('/logout', (req, res, next) => {
   });
 });
 
-/* Health & ping endpoints for uptime monitoring (resilient) */
+/* Health & ping (BasicAuth protected if HEALTH_USER/HEALTH_PASS set) */
 // maintain last known DB state to respond quickly
 let lastDbState = 0;
 try {
@@ -146,13 +125,31 @@ try {
   console.error('Health init mongoose read failed', e && e.message);
 }
 
+// BasicAuth middleware for /health
+function basicAuth(req, res, next) {
+  const user = process.env.HEALTH_USER;
+  const pass = process.env.HEALTH_PASS;
+  if (!user || !pass) return next(); // not configured -> allow
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Basic ')) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="health"');
+    return res.status(401).send('Authentication required');
+  }
+  const encoded = auth.split(' ')[1];
+  const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+  const [u, p] = decoded.split(':');
+  if (u === user && p === pass) return next();
+  res.setHeader('WWW-Authenticate', 'Basic realm="health"');
+  return res.status(401).send('Invalid credentials');
+}
+
 app.get('/ping', (req, res) => res.send('pong'));
 
-app.get('/health', async (req, res) => {
+app.get('/health', basicAuth, async (req, res) => {
   const start = Date.now();
   const okFast = lastDbState === 1;
 
-  // lightweight async DB ping with 2s timeout to avoid monitor timeouts
+  // lightweight async DB ping with 2s timeout
   const dbCheck = new Promise(resolve => {
     try {
       const mongoose = require('mongoose');
@@ -172,7 +169,9 @@ app.get('/health', async (req, res) => {
   const timeout = new Promise(resolve => setTimeout(() => resolve({ ok: false, err: 'timeout' }), 2000));
   const checkResult = await Promise.race([dbCheck, timeout]);
   const elapsed = Date.now() - start;
-  const healthy = okFast && checkResult.ok;
+
+  // NEW: consider healthy if last known DB connection is good OR db ping succeeded.
+  const healthy = (okFast || checkResult.ok);
 
   const body = {
     status: healthy ? 'ok' : 'fail',
@@ -182,7 +181,8 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString()
   };
 
-  if (!healthy || elapsed > 500) {
+  // log only failures or slow checks
+  if (!healthy || elapsed > 1000) {
     console.warn('Health check:', body);
   } else {
     console.log('Health ok', body);
@@ -197,15 +197,9 @@ app.use((err, req, res, next) => {
   res.status(500).send('Internal Server Error');
 });
 
-/* utility: simple html escape */
 function escapeHtml(str) {
   if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 app.listen(PORT, () => {
